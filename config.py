@@ -4,6 +4,8 @@ class Config:
     """
     This is the class which will contain the general configurations
     """
+    pass
+
     SQLALCHEMY_DATABASE_URI='postgresql+psycopg2://moringa:qwerty12@localhost/farmers'
     SQLALCHEMY_DATABASE_URI =os.environ.get('DATABASE_URL')
     SECRET_KEY = os.environ.get("SECRET_KEY")
@@ -20,10 +22,22 @@ class Config:
 
 
 class ProdConfig(Config):
+    '''
+    Production  configuration child class
+    Args:
+       Config: The parent configuration class with General configuration settings
+   '''
+    pass
+
     SQLALCHEMY_DATABASE_URI =os.environ.get('DATABASE_URL')
 
 
 class DevConfig(Config):
+    '''
+    Development  configuration child class
+    Args:
+    Config: The parent configuration class with General configuration settings
+    '''
     SQLALCHEMY_DATABASE_URI='postgresql+psycopg2://moringa:qwerty12@localhost/farmers' 
     DEBUG = True
   
@@ -32,7 +46,6 @@ class TestConfig(Config):
     """
     This is the class which will contain the test configurations
     """
-    SQLALCHEMY_DATABASE_URI =os.environ.get('DATABASE_URL')
     SQLALCHEMY_DATABASE_URI='postgresql+psycopg2://moringa:qwerty12@localhost/farmers'
 
 
