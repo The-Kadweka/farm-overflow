@@ -42,7 +42,7 @@ markdown2==2.3.8
 MarkupSafe==1.1.1
 mccabe==0.6.1
 ngrok==0.0.1
-nltk==3.4.3
+nltk==3.4.5
 nodejs==0.1.1
 npm==0.1.1
 optional-django==0.1.0
