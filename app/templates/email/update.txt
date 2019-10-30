@@ -1,0 +1,6 @@
+Hey,
+There is a new farmoveflow post by {{user.full_name}}
+Please log in to check it out
+
+Cheers,
+Blogger Team
