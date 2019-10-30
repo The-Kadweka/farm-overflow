@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/home/francis/Documents/flask/PROJECT(group)/FarmOverflow/virtual"
+VIRTUAL_ENV="/home/moringa/FLASK-PROJEC-POLISHING/FarmOverflow/virtual"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

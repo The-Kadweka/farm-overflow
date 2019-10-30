@@ -2,16 +2,21 @@
 
 import datetime
 import decimal
+import json
 
 from .. import config
+from .. import engines
 from .. import fixtures
+from .. import mock
 from ..assertions import eq_
 from ..config import requirements
 from ..schema import Column
 from ..schema import Table
 from ... import and_
 from ... import BigInteger
+from ... import bindparam
 from ... import Boolean
+from ... import case
 from ... import cast
 from ... import Date
 from ... import DateTime
@@ -287,6 +292,33 @@ class _DateFixture(_LiteralRoundTripFixture):
     def test_literal(self):
         compare = self.compare or self.data
         self._literal_round_trip(self.datatype, [self.data], [compare])
+
+    @testing.requires.standalone_null_binds_whereclause
+    def test_null_bound_comparison(self):
+        # this test is based on an Oracle issue observed in #4886.
+        # passing NULL for an expression that needs to be interpreted as
+        # a certain type, does the DBAPI have the info it needs to do this.
+        date_table = self.tables.date_table
+        with config.db.connect() as conn:
+            result = conn.execute(
+                date_table.insert(), {"date_data": self.data}
+            )
+            id_ = result.inserted_primary_key[0]
+            stmt = select([date_table.c.id]).where(
+                case(
+                    [
+                        (
+                            bindparam("foo", type_=self.datatype) != None,
+                            bindparam("foo", type_=self.datatype),
+                        )
+                    ],
+                    else_=date_table.c.date_data,
+                )
+                == date_table.c.date_data
+            )
+
+            row = conn.execute(stmt, {"foo": None}).first()
+            eq_(row[0], id_)
 
 
 class DateTimeTest(_DateFixture, fixtures.TablesTest):
@@ -612,6 +644,7 @@ class BooleanTest(_LiteralRoundTripFixture, fixtures.TablesTest):
         eq_(row, (True, False))
         assert isinstance(row[0], bool)
 
+    @testing.requires.nullable_booleans
     def test_null(self):
         boolean_table = self.tables.boolean_table
 
@@ -726,6 +759,28 @@ class JSONTest(_LiteralRoundTripFixture, fixtures.TablesTest):
         row = config.db.execute(select([data_table.c.data])).first()
 
         eq_(row, (data_element,))
+
+    def test_round_trip_custom_json(self):
+        data_table = self.tables.data_table
+        data_element = {"key1": "data1"}
+
+        js = mock.Mock(side_effect=json.dumps)
+        jd = mock.Mock(side_effect=json.loads)
+        engine = engines.testing_engine(
+            options=dict(json_serializer=js, json_deserializer=jd)
+        )
+
+        # support sqlite :memory: database...
+        data_table.create(engine, checkfirst=True)
+        engine.execute(
+            data_table.insert(), {"name": "row1", "data": data_element}
+        )
+
+        row = engine.execute(select([data_table.c.data])).first()
+
+        eq_(row, (data_element,))
+        eq_(js.mock_calls, [mock.call(data_element)])
+        eq_(jd.mock_calls, [mock.call(json.dumps(data_element))])
 
     def test_round_trip_none_as_sql_null(self):
         col = self.tables.data_table.c["nulldata"]

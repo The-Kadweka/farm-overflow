@@ -254,6 +254,12 @@ def create_engine(*args, **kwargs):
         be applied to all connections.  See
         :meth:`~sqlalchemy.engine.Connection.execution_options`
 
+    :param hide_parameters: Boolean, when set to True, SQL statement parameters
+        will not be displayed in INFO logging nor will they be formatted into
+        the string representation of :class:`.StatementError` objects.
+
+        .. versionadded:: 1.3.8
+
     :param implicit_returning=True: When ``True``, a RETURNING-
         compatible construct, if available, will be used to
         fetch newly generated primary key values when a single row
@@ -291,11 +297,34 @@ def create_engine(*args, **kwargs):
 
             :ref:`session_transaction_isolation` - for the ORM
 
+    :param json_deserializer: for dialects that support the :class:`.JSON`
+        datatype, this is a Python callable that will convert a JSON string
+        to a Python object.  By default, the Python ``json.loads`` function is
+        used.
+
+        .. versionchanged:: 1.3.7  The SQLite dialect renamed this from
+           ``_json_deserializer``.
+
+    :param json_serializer: for dialects that support the :class:`.JSON`
+        datatype, this is a Python callable that will render a given object
+        as JSON.   By default, the Python ``json.dumps`` function is used.
+
+        .. versionchanged:: 1.3.7  The SQLite dialect renamed this from
+           ``_json_serializer``.
+
     :param label_length=None: optional integer value which limits
         the size of dynamically generated column labels to that many
         characters. If less than 6, labels are generated as
         "_(counter)". If ``None``, the value of
-        ``dialect.max_identifier_length`` is used instead.
+        ``dialect.max_identifier_length``, which may be affected via the
+        :paramref:`.create_engine.max_identifier_length` parameter,
+        is used instead.   The value of :paramref:`.create_engine.label_length`
+        may not be larger than that of
+        :paramref:`.create_engine.max_identfier_length`.
+
+        .. seealso::
+
+            :paramref:`.create_engine.max_identifier_length`
 
     :param listeners: A list of one or more
         :class:`~sqlalchemy.interfaces.PoolListener` objects which will
@@ -305,6 +334,21 @@ def create_engine(*args, **kwargs):
         the "name" field of logging records generated within the
         "sqlalchemy.engine" logger. Defaults to a hexstring of the
         object's id.
+
+    :param max_identifier_length: integer; override the max_identifier_length
+        determined by the dialect.  if ``None`` or zero, has no effect.  This
+        is the database's configured maximum number of characters that may be
+        used in a SQL identifier such as a table name, column name, or label
+        name. All dialects determine this value automatically, however in the
+        case of a new database version for which this value has changed but
+        SQLAlchemy's dialect has not been adjusted, the value may be passed
+        here.
+
+        .. versionadded:: 1.3.9
+
+        .. seealso::
+
+            :paramref:`.create_engine.label_length`
 
     :param max_overflow=10: the number of connections to allow in
         connection pool "overflow", that is connections that can be

@@ -112,6 +112,15 @@ class SuiteRequirements(Requirements):
         return exclusions.open()
 
     @property
+    def sql_expression_limit_offset(self):
+        """target database can render LIMIT and/or OFFSET with a complete
+        SQL expression, such as one that uses the addition operator.
+        parameter
+        """
+
+        return exclusions.open()
+
+    @property
     def parens_in_union_contained_select_w_limit_offset(self):
         """Target database must support parenthesized SELECT in UNION
         when LIMIT/OFFSET is specifically present.
@@ -144,6 +153,12 @@ class SuiteRequirements(Requirements):
         return exclusions.closed()
 
     @property
+    def nullable_booleans(self):
+        """Target database allows boolean columns to store NULL."""
+
+        return exclusions.open()
+
+    @property
     def nullsordering(self):
         """Target backends that support nulls ordering."""
 
@@ -156,6 +171,14 @@ class SuiteRequirements(Requirements):
 
         """
         return exclusions.closed()
+
+    @property
+    def standalone_null_binds_whereclause(self):
+        """target database/driver supports bound parameters with NULL in the
+        WHERE clause, in situations where it has to be typed.
+
+        """
+        return exclusions.open()
 
     @property
     def intersect(self):
@@ -349,6 +372,23 @@ class SuiteRequirements(Requirements):
         """Target database must support external schemas, and have one
         named 'test_schema'."""
 
+        return exclusions.closed()
+
+    @property
+    def cross_schema_fk_reflection(self):
+        """target system must support reflection of inter-schema foreign keys
+
+        """
+        return exclusions.closed()
+
+    @property
+    def implicit_default_schema(self):
+        """target system has a strong concept of 'default' schema that can
+           be referred to implicitly.
+
+           basically, PostgreSQL.
+
+        """
         return exclusions.closed()
 
     @property
@@ -801,6 +841,16 @@ class SuiteRequirements(Requirements):
         return exclusions.closed()
 
     @property
+    def order_by_col_from_union(self):
+        """target database supports ordering by a column from a SELECT
+        inside of a UNION
+
+        E.g.  (SELECT id, ...) UNION (SELECT id, ...) ORDER BY id
+
+        """
+        return exclusions.open()
+
+    @property
     def order_by_label_with_expression(self):
         """target backend supports ORDER BY a column label within an
         expression.
@@ -841,6 +891,13 @@ class SuiteRequirements(Requirements):
         """Target driver must raise a DBAPI-level exception, such as
         InterfaceError, when the underlying connection has been closed
         and the execute() method is called.
+        """
+        return exclusions.open()
+
+    @property
+    def independent_connections(self):
+        """
+        Target must support simultaneous, independent database connections.
         """
         return exclusions.open()
 

@@ -4,76 +4,38 @@ import io
 import re
 
 from sqlalchemy import Column
-from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy import MetaData
 from sqlalchemy import String
 from sqlalchemy import Table
 from sqlalchemy import text
+from sqlalchemy.testing import config
+from sqlalchemy.testing import mock
+from sqlalchemy.testing.assertions import eq_
+from sqlalchemy.testing.fixtures import TestBase  # noqa
 
 import alembic
-from . import config
-from . import mock
 from .assertions import _get_dialect
-from .assertions import eq_
-from .plugin.plugin_base import SkipTest
-from .. import util
 from ..environment import EnvironmentContext
 from ..migration import MigrationContext
 from ..operations import Operations
+from ..util import compat
 from ..util.compat import configparser
 from ..util.compat import string_types
 from ..util.compat import text_type
+from ..util.sqla_compat import create_mock_engine
 
 testing_config = configparser.ConfigParser()
 testing_config.read(["test.cfg"])
 
 
-if not util.sqla_094:
-
-    class TestBase(object):
-        # A sequence of database names to always run, regardless of the
-        # constraints below.
-        __whitelist__ = ()
-
-        # A sequence of requirement names matching testing.requires decorators
-        __requires__ = ()
-
-        # A sequence of dialect names to exclude from the test class.
-        __unsupported_on__ = ()
-
-        # If present, test class is only runnable for the *single* specified
-        # dialect.  If you need multiple, use __unsupported_on__ and invert.
-        __only_on__ = None
-
-        # A sequence of no-arg callables. If any are True, the entire
-        # testcase is skipped.
-        __skip_if__ = None
-
-        def assert_(self, val, msg=None):
-            assert val, msg
-
-        # apparently a handful of tests are doing this....OK
-        def setup(self):
-            if hasattr(self, "setUp"):
-                self.setUp()
-
-        def teardown(self):
-            if hasattr(self, "tearDown"):
-                self.tearDown()
-
-
-else:
-    from sqlalchemy.testing.fixtures import TestBase  # noqa
-
-
-def capture_db():
+def capture_db(dialect="postgresql://"):
     buf = []
 
     def dump(sql, *multiparams, **params):
         buf.append(str(sql.compile(dialect=engine.dialect)))
 
-    engine = create_engine("postgresql://", strategy="mock", executor=dump)
+    engine = create_mock_engine(dialect, dump)
     return engine, buf
 
 
@@ -98,6 +60,32 @@ def capture_context_buffer(**kw):
         yield buf
 
 
+@contextmanager
+def capture_engine_context_buffer(**kw):
+    from .env import _sqlite_file_db
+    from sqlalchemy import event
+
+    buf = compat.StringIO()
+
+    eng = _sqlite_file_db()
+
+    conn = eng.connect()
+
+    @event.listens_for(conn, "before_cursor_execute")
+    def bce(conn, cursor, statement, parameters, context, executemany):
+        buf.write(statement + "\n")
+
+    kw.update({"connection": conn})
+    conf = EnvironmentContext.configure
+
+    def configure(*arg, **opt):
+        opt.update(**kw)
+        return conf(*arg, **opt)
+
+    with mock.patch.object(EnvironmentContext, "configure", configure):
+        yield buf
+
+
 def op_fixture(
     dialect="default",
     as_sql=False,
@@ -108,10 +96,6 @@ def op_fixture(
 
     opts = {}
     if naming_convention:
-        if not util.sqla_092:
-            raise SkipTest(
-                "naming_convention feature requires " "sqla 0.9.2 or greater"
-            )
         opts["target_metadata"] = MetaData(naming_convention=naming_convention)
 
     class buffer_(object):

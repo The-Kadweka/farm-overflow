@@ -528,6 +528,12 @@ class ColumnOperators(Operators):
 
             WHERE COL IN (?, ?, ?)
 
+        * A list of tuples may be provided if the comparison is against a
+          :func:`.tuple_` containing multiple expressions::
+
+            from sqlalchemy import tuple_
+            stmt.where(tuple_(col1, col2).in_([(1, 10), (2, 20), (3, 30)]))
+
         * An empty list, e.g.::
 
             stmt.where(column.in_([]))
@@ -1345,6 +1351,10 @@ def empty_notin_op(a, b):
     raise NotImplementedError()
 
 
+def filter_op(a, b):
+    raise NotImplementedError()
+
+
 def concat_op(a, b):
     return a.concat(b)
 
@@ -1443,6 +1453,7 @@ _PRECEDENCE = {
     add: 7,
     sub: 7,
     concat_op: 6,
+    filter_op: 6,
     match_op: 5,
     notmatch_op: 5,
     ilike_op: 5,

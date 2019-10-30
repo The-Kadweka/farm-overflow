@@ -29,7 +29,7 @@ end
 # unset irrelevant variables
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "/home/francis/Documents/flask/PROJECT(group)/FarmOverflow/virtual"
+set -gx VIRTUAL_ENV "/home/moringa/FLASK-PROJEC-POLISHING/FarmOverflow/virtual"
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/bin" $PATH

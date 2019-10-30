@@ -3,13 +3,9 @@ import inspect
 import io
 import sys
 
-if sys.version_info < (2, 7):
-    raise NotImplementedError("Python 2.7 or greater is required.")
-
 py27 = sys.version_info >= (2, 7)
 py2k = sys.version_info.major < 3
 py3k = sys.version_info.major >= 3
-py33 = sys.version_info >= (3, 3)
 py35 = sys.version_info >= (3, 5)
 py36 = sys.version_info >= (3, 6)
 
@@ -87,7 +83,7 @@ else:
 
     range = xrange  # noqa
 
-if py33:
+if py3k:
     import collections.abc as collections_abc
 else:
     import collections as collections_abc  # noqa
@@ -222,11 +218,17 @@ if py3k:
         return suffixes
 
     def has_pep3147():
-        # http://www.python.org/dev/peps/pep-3147/#detecting-pep-3147-availability
 
-        import imp
+        if py35:
+            return True
+        else:
+            # TODO: not sure if we are supporting old versions of Python
+            # the import here emits a deprecation warning which the test
+            # suite only catches if imp wasn't imported alreadt
+            # http://www.python.org/dev/peps/pep-3147/#detecting-pep-3147-availability
+            import imp
 
-        return hasattr(imp, "get_tag")
+            return hasattr(imp, "get_tag")
 
 
 else:
@@ -321,7 +323,7 @@ class EncodedIO(io.TextIOWrapper):
 if py2k:
     # in Py2K, the io.* package is awkward because it does not
     # easily wrap the file type (e.g. sys.stdout) and I can't
-    # figure out at all how to wrap StringIO.StringIO (used by nosetests)
+    # figure out at all how to wrap StringIO.StringIO
     # and also might be user specified too.  So create a full
     # adapter.
 

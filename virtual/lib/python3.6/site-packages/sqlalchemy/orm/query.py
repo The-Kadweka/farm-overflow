@@ -1511,13 +1511,17 @@ class Query(object):
         return self.add_columns(column)
 
     def options(self, *args):
-        """Return a new Query object, applying the given list of
+        """Return a new :class:`.Query` object, applying the given list of
         mapper options.
 
         Most supplied options regard changing how column- and
-        relationship-mapped attributes are loaded. See the sections
-        :ref:`deferred` and :doc:`/orm/loading_relationships` for reference
-        documentation.
+        relationship-mapped attributes are loaded.
+
+        .. seealso::
+
+            :ref:`deferred_options`
+
+            :ref:`relationship_loader_options`
 
         """
         return self._options(False, *args)
@@ -2449,9 +2453,11 @@ class Query(object):
                 use_entity_index,
             ) = self._join_place_explicit_left_side(left)
 
-        # this should never happen because we would not have found a place
-        # to join on
-        assert left is not right or create_aliases
+        if left is right and not create_aliases:
+            raise sa_exc.InvalidRequestError(
+                "Can't construct a join from %s to %s, they "
+                "are the same entity" % (left, right)
+            )
 
         # the right side as given often needs to be adapted.  additionally
         # a lot of things can be wrong with it.  handle all that and
@@ -3048,14 +3054,18 @@ class Query(object):
 
         """
         if start is not None and stop is not None:
-            self._offset = (self._offset or 0) + start
+            self._offset = self._offset if self._offset is not None else 0
+            if start != 0:
+                self._offset += start
             self._limit = stop - start
         elif start is None and stop is not None:
             self._limit = stop
         elif start is not None and stop is None:
-            self._offset = (self._offset or 0) + start
+            self._offset = self._offset if self._offset is not None else 0
+            if start != 0:
+                self._offset += start
 
-        if self._offset == 0:
+        if isinstance(self._offset, int) and self._offset == 0:
             self._offset = None
 
     @_generative(_no_statement_condition)
@@ -3160,10 +3170,18 @@ class Query(object):
             self._suffixes = suffixes
 
     def all(self):
-        """Return the results represented by this ``Query`` as a list.
+        """Return the results represented by this :class:`.Query` as a list.
 
-        This results in an execution of the underlying query.
+        This results in an execution of the underlying SQL statement.
 
+        .. warning::  The :class:`.Query` object, when asked to return either
+           a sequence or iterator that consists of full ORM-mapped entities,
+           will **deduplicate entries based on primary key**.  See the FAQ for
+           more details.
+
+            .. seealso::
+
+                :ref:`faq_query_deduplicating`
         """
         return list(self)
 
@@ -3525,13 +3543,14 @@ class Query(object):
         # we get just "SELECT 1" without any entities.
         return sql.exists(
             self.enable_eagerloads(False)
-            .add_columns("1")
+            .add_columns(sql.literal_column("1"))
             .with_labels()
             .statement.with_only_columns([1])
         )
 
     def count(self):
-        r"""Return a count of rows this Query would return.
+        r"""Return a count of rows this the SQL formed by this :class:`Query`
+        would return.
 
         This generates the SQL for this Query as follows::
 
@@ -3539,13 +3558,31 @@ class Query(object):
                 SELECT <rest of query follows...>
             ) AS anon_1
 
-        For fine grained control over specific columns
-        to count, to skip the usage of a subquery or
-        otherwise control of the FROM clause,
-        or to use other aggregate functions,
-        use :attr:`~sqlalchemy.sql.expression.func`
-        expressions in conjunction
-        with :meth:`~.Session.query`, i.e.::
+        The above SQL returns a single row, which is the aggregate value
+        of the count function; the :meth:`.Query.count` method then returns
+        that single integer value.
+
+        .. warning::
+
+            It is important to note that the value returned by
+            count() is **not the same as the number of ORM objects that this
+            Query would return from a method such as the .all() method**.
+            The :class:`.Query` object, when asked to return full entities,
+            will **deduplicate entries based on primary key**, meaning if the
+            same primary key value would appear in the results more than once,
+            only one object of that primary key would be present.  This does
+            not apply to a query that is against individual columns.
+
+            .. seealso::
+
+                :ref:`faq_query_deduplicating`
+
+                :ref:`orm_tutorial_query_returning`
+
+        For fine grained control over specific columns to count, to skip the
+        usage of a subquery or otherwise control of the FROM clause, or to use
+        other aggregate functions, use :attr:`~sqlalchemy.sql.expression.func`
+        expressions in conjunction with :meth:`~.Session.query`, i.e.::
 
             from sqlalchemy import func
 
@@ -4440,6 +4477,12 @@ class _ColumnEntity(_QueryEntity):
         check_column = False
 
         if isinstance(column, util.string_types):
+            util.warn_deprecated(
+                "Plain string expression passed to Query() should be "
+                "explicitly declared using literal_column(); "
+                "automatic coercion of this value will be removed in "
+                "SQLAlchemy 1.4"
+            )
             column = sql.literal_column(column)
             self._label_name = column.name
             search_entities = False

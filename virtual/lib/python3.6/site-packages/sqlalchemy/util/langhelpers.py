@@ -266,7 +266,7 @@ def _inspect_func_args(fn):
         nargs = co.co_argcount
         return (
             list(co.co_varnames[:nargs]),
-            bool(co.co_flags & inspect.CO_VARKEYWORDS),
+            bool(co.co_flags & co_varkeywords),
         )
 
 
@@ -1116,11 +1116,14 @@ def asint(value):
     return int(value)
 
 
-def coerce_kw_type(kw, key, type_, flexi_bool=True):
+def coerce_kw_type(kw, key, type_, flexi_bool=True, dest=None):
     r"""If 'key' is present in dict 'kw', coerce its value to type 'type\_' if
     necessary.  If 'flexi_bool' is True, the string '0' is considered false
     when coercing to boolean.
     """
+
+    if dest is None:
+        dest = kw
 
     if (
         key in kw
@@ -1128,9 +1131,9 @@ def coerce_kw_type(kw, key, type_, flexi_bool=True):
         and kw[key] is not None
     ):
         if type_ is bool and flexi_bool:
-            kw[key] = asbool(kw[key])
+            dest[key] = asbool(kw[key])
         else:
-            kw[key] = type_(kw[key])
+            dest[key] = type_(kw[key])
 
 
 def constructor_copy(obj, cls, *args, **kw):
@@ -1347,6 +1350,41 @@ class symbol(object):
         finally:
             symbol._lock.release()
 
+    @classmethod
+    def parse_user_argument(
+        cls, arg, choices, name, resolve_symbol_names=False
+    ):
+        """Given a user parameter, parse the parameter into a chosen symbol.
+
+        The user argument can be a string name that matches the name of a
+        symbol, or the symbol object itself, or any number of alternate choices
+        such as True/False/ None etc.
+
+        :param arg: the user argument.
+        :param choices: dictionary of symbol object to list of possible
+         entries.
+        :param name: name of the argument.   Used in an :class:`.ArgumentError`
+         that is raised if the parameter doesn't match any available argument.
+        :param resolve_symbol_names: include the name of each symbol as a valid
+         entry.
+
+        """
+        # note using hash lookup is tricky here because symbol's `__hash__`
+        # is its int value which we don't want included in the lookup
+        # explicitly, so we iterate and compare each.
+        for sym, choice in choices.items():
+            if arg is sym:
+                return sym
+            elif resolve_symbol_names and arg == sym.name:
+                return sym
+            elif arg in choice:
+                return sym
+
+        if arg is None:
+            return None
+
+        raise exc.ArgumentError("Invalid value for '%s': %r" % (name, arg))
+
 
 _creation_order = 1
 
@@ -1431,16 +1469,24 @@ def warn_limited(msg, args):
     warnings.warn(msg, exc.SAWarning, stacklevel=2)
 
 
-def only_once(fn):
+def only_once(fn, retry_on_exception):
     """Decorate the given function to be a no-op after it is called exactly
     once."""
 
     once = [fn]
 
     def go(*arg, **kw):
+        # strong reference fn so that it isn't garbage collected,
+        # which interferes with the event system's expectations
+        strong_fn = fn  # noqa
         if once:
             once_fn = once.pop()
-            return once_fn(*arg, **kw)
+            try:
+                return once_fn(*arg, **kw)
+            except:
+                if retry_on_exception:
+                    once.insert(0, once_fn)
+                raise
 
     return go
 

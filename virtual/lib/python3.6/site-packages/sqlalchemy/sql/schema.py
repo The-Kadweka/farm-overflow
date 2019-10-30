@@ -104,7 +104,17 @@ class SchemaItem(SchemaEventTarget, visitors.Visitable):
 
         for item in args:
             if item is not None:
-                item._set_parent_with_dispatch(self)
+                try:
+                    spwd = item._set_parent_with_dispatch
+                except AttributeError:
+                    util.raise_from_cause(
+                        exc.ArgumentError(
+                            "'SchemaItem' object, such as a 'Column' or a "
+                            "'Constraint' expected, got %r" % item
+                        )
+                    )
+                else:
+                    spwd(self)
 
     def get_children(self, **kwargs):
         """used to allow SchemaVisitor access"""
@@ -1607,7 +1617,7 @@ class Column(DialectKWArgs, SchemaItem, ColumnClause):
         c.table = selectable
         selectable._columns.add(c)
         if selectable._is_clone_of is not None:
-            c._is_clone_of = selectable._is_clone_of.columns[c.key]
+            c._is_clone_of = selectable._is_clone_of.columns.get(c.key)
         if self.primary_key:
             selectable.primary_key.add(c)
         c.dispatch.after_parent_attach(c, selectable)
@@ -1925,7 +1935,7 @@ class ForeignKey(DialectKWArgs, SchemaItem):
 
         parenttable = self.parent.table
 
-        # assertion, can be commented out.
+        # assertion
         # basically Column._make_proxy() sends the actual
         # target Column to the ForeignKey object, so the
         # string resolution here is never called.
@@ -2729,7 +2739,9 @@ def _to_schema_column(element):
 
 
 def _to_schema_column_or_string(element):
-    if hasattr(element, "__clause_element__"):
+    if element is None:
+        return element
+    elif hasattr(element, "__clause_element__"):
         element = element.__clause_element__()
     if not isinstance(element, util.string_types + (ColumnElement,)):
         msg = "Element %r is not a string name or column element"
@@ -2826,11 +2838,16 @@ class ColumnCollectionMixin(object):
                     )
                 )
 
+    def _col_expressions(self, table):
+        return [
+            table.c[col] if isinstance(col, util.string_types) else col
+            for col in self._pending_colargs
+        ]
+
     def _set_parent(self, table):
-        for col in self._pending_colargs:
-            if isinstance(col, util.string_types):
-                col = table.c[col]
-            self.columns.add(col)
+        for col in self._col_expressions(table):
+            if col is not None:
+                self.columns.add(col)
 
 
 class ColumnCollectionConstraint(ColumnCollectionMixin, Constraint):
@@ -3631,8 +3648,7 @@ class Index(DialectKWArgs, ColumnCollectionMixin, SchemaItem):
             strname,
             add_element,
         ) in self._extract_col_expression_collection(expressions):
-            if add_element is not None:
-                columns.append(add_element)
+            columns.append(add_element)
             processed_expressions.append(expr)
 
         self.expressions = processed_expressions
@@ -3670,11 +3686,12 @@ class Index(DialectKWArgs, ColumnCollectionMixin, SchemaItem):
         self.table = table
         table.indexes.add(self)
 
+        expressions = self.expressions
+        col_expressions = self._col_expressions(table)
+        assert len(expressions) == len(col_expressions)
         self.expressions = [
             expr if isinstance(expr, ClauseElement) else colexpr
-            for expr, colexpr in util.zip_longest(
-                self.expressions, self.columns
-            )
+            for expr, colexpr in zip(expressions, col_expressions)
         ]
 
     @property
@@ -3792,7 +3809,7 @@ class MetaData(SchemaItem):
 
            .. note::
 
-                As refered above, the :paramref:`.MetaData.schema` parameter
+                As referred above, the :paramref:`.MetaData.schema` parameter
                 only refers to the **default value** that will be applied to
                 the :paramref:`.Table.schema` parameter of an incoming
                 :class:`.Table` object.   It does not refer to how the

@@ -690,6 +690,7 @@ from ...types import SMALLINT
 from ...types import TEXT
 from ...types import VARCHAR
 from ...util import update_wrapper
+from ...util.langhelpers import public_factory
 
 
 # http://sqlserverbuilds.blogspot.com/
@@ -1172,6 +1173,41 @@ class SQL_VARIANT(sqltypes.TypeEngine):
     __visit_name__ = "SQL_VARIANT"
 
 
+class TryCast(sql.elements.Cast):
+    """Represent a SQL Server TRY_CAST expression.
+
+    """
+
+    __visit_name__ = "try_cast"
+
+    def __init__(self, *arg, **kw):
+        """Create a TRY_CAST expression.
+
+        :class:`.TryCast` is a subclass of SQLAlchemy's :class:`.Cast`
+        construct, and works in the same way, except that the SQL expression
+        rendered is "TRY_CAST" rather than "CAST"::
+
+            from sqlalchemy import select
+            from sqlalchemy import Numeric
+            from sqlalchemy.dialects.mssql import try_cast
+
+            stmt = select([
+                try_cast(product_table.c.unit_price, Numeric(10, 4))
+            ])
+
+        The above would render::
+
+            SELECT TRY_CAST (product_table.unit_price AS NUMERIC(10, 4))
+            FROM product_table
+
+        .. versionadded:: 1.3.7
+
+        """
+        super(TryCast, self).__init__(*arg, **kw)
+
+
+try_cast = public_factory(TryCast, ".mssql.try_cast")
+
 # old names.
 MSDateTime = _MSDateTime
 MSDate = _MSDate
@@ -1584,6 +1620,12 @@ class MSSQLCompiler(compiler.SQLCompiler):
     def limit_clause(self, select, **kw):
         # Limit in mssql is after the select keyword
         return ""
+
+    def visit_try_cast(self, element, **kw):
+        return "TRY_CAST (%s AS %s)" % (
+            self.process(element.clause, **kw),
+            self.process(element.typeclause, **kw),
+        )
 
     def visit_select(self, select, **kwargs):
         """Look for ``LIMIT`` and OFFSET in a select statement, and if
@@ -2120,12 +2162,21 @@ def _db_plus_owner(fn):
 def _switch_db(dbname, connection, fn, *arg, **kw):
     if dbname:
         current_db = connection.scalar("select db_name()")
-        connection.execute("use %s" % dbname)
+        if current_db != dbname:
+            connection.execute(
+                "use %s"
+                % connection.dialect.identifier_preparer.quote_schema(dbname)
+            )
     try:
         return fn(*arg, **kw)
     finally:
-        if dbname:
-            connection.execute("use %s" % current_db)
+        if dbname and current_db != dbname:
+            connection.execute(
+                "use %s"
+                % connection.dialect.identifier_preparer.quote_schema(
+                    current_db
+                )
+            )
 
 
 def _owner_plus_db(dialect, schema):
@@ -2212,7 +2263,6 @@ class MSDialect(default.DefaultDialect):
         self,
         query_timeout=None,
         use_scope_identity=True,
-        max_identifier_length=None,
         schema_name="dbo",
         isolation_level=None,
         deprecate_large_types=None,
@@ -2223,9 +2273,6 @@ class MSDialect(default.DefaultDialect):
         self.schema_name = schema_name
 
         self.use_scope_identity = use_scope_identity
-        self.max_identifier_length = (
-            int(max_identifier_length or 0) or self.max_identifier_length
-        )
         self.deprecate_large_types = deprecate_large_types
         self.legacy_schema_aliasing = legacy_schema_aliasing
 
@@ -2427,8 +2474,8 @@ class MSDialect(default.DefaultDialect):
                 "and ind.is_primary_key=0 and ind.type != 0"
             )
             .bindparams(
-                sql.bindparam("tabname", tablename, sqltypes.String()),
-                sql.bindparam("schname", owner, sqltypes.String()),
+                sql.bindparam("tabname", tablename, ischema.CoerceUnicode()),
+                sql.bindparam("schname", owner, ischema.CoerceUnicode()),
             )
             .columns(name=sqltypes.Unicode())
         )
@@ -2452,8 +2499,8 @@ class MSDialect(default.DefaultDialect):
                 "and sch.name=:schname"
             )
             .bindparams(
-                sql.bindparam("tabname", tablename, sqltypes.String()),
-                sql.bindparam("schname", owner, sqltypes.String()),
+                sql.bindparam("tabname", tablename, ischema.CoerceUnicode()),
+                sql.bindparam("schname", owner, ischema.CoerceUnicode()),
             )
             .columns(name=sqltypes.Unicode())
         )
@@ -2478,8 +2525,8 @@ class MSDialect(default.DefaultDialect):
                 "views.schema_id=sch.schema_id and "
                 "views.name=:viewname and sch.name=:schname"
             ).bindparams(
-                sql.bindparam("viewname", viewname, sqltypes.String()),
-                sql.bindparam("schname", owner, sqltypes.String()),
+                sql.bindparam("viewname", viewname, ischema.CoerceUnicode()),
+                sql.bindparam("schname", owner, ischema.CoerceUnicode()),
             )
         )
 
@@ -2675,7 +2722,6 @@ class MSDialect(default.DefaultDialect):
 
         # group rows by constraint ID, to handle multi-column FKs
         fkeys = []
-        fknm, scols, rcols = (None, [], [])
 
         def fkey_rec():
             return {
