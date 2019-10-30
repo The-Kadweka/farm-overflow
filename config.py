@@ -15,8 +15,6 @@ class Config:
    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
    UPLOADED_PHOTOS_DEST = "app/static/photos"
    SUBJECT_PREFIX = 'FARMERS-HOME'
-   MAIL_USERNAME="developersjuniors@gmail.com"
-   MAIL_PASSWORD="Nairobi001"
    SECRET_KEY = os.environ.get('SECRET_KEY')
    SQLALCHEMY_TRACK_MODIFICATIONS=False
 
@@ -28,7 +26,8 @@ class ProdConfig(Config):
        Config: The parent configuration class with General configuration settings
    '''
    pass
-   SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+   SQLALCHEMY_DA   MAIL_USERNAME="developersjuniors@gmail.com"
+   MAIL_PASSWORD="Nairobi001"TABASE_URI = os.environ.get("DATABASE_URL")
 class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI ='postgresql+psycopg2://moringa:qwerty12@localhost/farmers'
 class DevConfig(Config):
