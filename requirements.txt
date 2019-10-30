@@ -9,7 +9,7 @@ Bootstrap-Flask==1.1.0
 cffi==1.13.1
 Click==7.0
 configparser==3.7.4
-cryptography==2.1.4
+cryptography==2.3
 Django==1.11
 dominate==2.4.0
 enum34==1.1.6
